@@ -1,0 +1,147 @@
+/**
+ * variables.css
+ * Tokens de diseño semánticos oficiales para BioClean Master.
+ * Extraídos directamente de BioClean_Master_Presentacion_Comercial.pptx:
+ * Navy (#072246), Green (#55A724), Blue (#0C67B0), Ice Blue (#F0F7F9),
+ * Muted Slate (#4E6172), Mint Accent (#ABDE82), White (#FFFFFF).
+ * Rejilla estricta de base 8pt y escala tipográfica modular.
+ */
+
+:root {
+  /* ==========================================================================
+     PALETA DE COLOR SEMÁNTICA
+     ========================================================================== */
+  
+  /* Brand Primitives (PPTX Extracted) */
+  --bcm-navy: #072246;
+  --bcm-navy-dark: #04142B;
+  --bcm-navy-light: #0D356A;
+  --bcm-green: #55A724;
+  --bcm-green-hover: #468E1D;
+  --bcm-green-subtle: #EBF7E5;
+  --bcm-blue: #0C67B0;
+  --bcm-blue-hover: #094F88;
+  --bcm-blue-subtle: #E6F0F8;
+  --bcm-ice: #F0F7F9;
+  --bcm-slate: #4E6172;
+  --bcm-mint: #ABDE82;
+  --bcm-white: #FFFFFF;
+
+  /* Semantic Roles: Surface */
+  --color-surface-base: var(--bcm-ice);
+  --color-surface-card: var(--bcm-white);
+  --color-surface-elevated: var(--bcm-white);
+  --color-surface-subtle: #F6FAFC;
+  --color-surface-dark: var(--bcm-navy);
+  --color-surface-dark-elevated: var(--bcm-navy-light);
+
+  /* Semantic Roles: Content / Typography */
+  --color-content-primary: var(--bcm-navy);
+  --color-content-secondary: var(--bcm-slate);
+  --color-content-tertiary: #7E92A2;
+  --color-content-inverse: var(--bcm-white);
+  --color-content-brand: var(--bcm-green);
+
+  /* Semantic Roles: Brand / Action */
+  --color-brand-primary: var(--bcm-green);
+  --color-brand-hover: var(--bcm-green-hover);
+  --color-brand-subtle: var(--bcm-green-subtle);
+  --color-brand-secondary: var(--bcm-blue);
+  --color-brand-secondary-hover: var(--bcm-blue-hover);
+  --color-brand-secondary-subtle: var(--bcm-blue-subtle);
+  --color-focus-ring: var(--bcm-blue);
+
+  /* Semantic Roles: Feedback */
+  --color-feedback-danger: #D32F2F;
+  --color-feedback-danger-bg: #FEECEB;
+  --color-feedback-warning: #ED6C02;
+  --color-feedback-warning-bg: #FFF4E5;
+  --color-feedback-success: #2E7D32;
+  --color-feedback-success-bg: #EDF7ED;
+  --color-feedback-info: #0288D1;
+  --color-feedback-info-bg: #E1F5FE;
+
+  /* Borders & Dividers */
+  --color-border-subtle: #E2ECF2;
+  --color-border-default: #CFDEE7;
+  --color-border-strong: #A8C2D3;
+  --color-border-active: var(--bcm-green);
+
+  /* ==========================================================================
+     SISTEMA DE ESPACIADO (Grid Estricto Base 8pt)
+     ========================================================================== */
+  --space-1: 4px;   /* Micro-alineación, badges, iconos */
+  --space-2: 8px;   /* 1 unidad base */
+  --space-3: 12px;  /* 1.5 unidades */
+  --space-4: 16px;  /* 2 unidades */
+  --space-5: 20px;  /* 2.5 unidades */
+  --space-6: 24px;  /* 3 unidades */
+  --space-8: 32px;  /* 4 unidades */
+  --space-10: 40px; /* 5 unidades */
+  --space-12: 48px; /* 6 unidades */
+  --space-16: 64px; /* 8 unidades */
+  --space-20: 80px; /* 10 unidades */
+  --space-24: 96px; /* 12 unidades */
+
+  /* ==========================================================================
+     TIPOGRAFÍA (Aptos / Sans Corporativo Modular)
+     ========================================================================== */
+  --font-family-base: 'Aptos', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-display: 'Aptos', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Escala Modular */
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-md: 1.125rem;   /* 18px */
+  --font-size-lg: 1.25rem;    /* 20px */
+  --font-size-xl: 1.5rem;     /* 24px */
+  --font-size-2xl: 2rem;      /* 32px */
+  --font-size-3xl: 2.5rem;    /* 40px */
+  --font-size-4xl: 3rem;      /* 48px */
+
+  /* Interlineado (Ratios UX) */
+  --line-height-heading: 1.25; /* 120-130% para títulos */
+  --line-height-base: 1.55;    /* 150-160% para lectura continua */
+  --line-height-tight: 1.15;
+
+  /* Pesos */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ==========================================================================
+     ELEVACIÓN Y SOMBRAS
+     ========================================================================== */
+  --shadow-sm: 0 1px 2px 0 rgba(7, 34, 70, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(7, 34, 70, 0.08), 0 2px 4px -1px rgba(7, 34, 70, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(7, 34, 70, 0.1), 0 4px 6px -2px rgba(7, 34, 70, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(7, 34, 70, 0.12), 0 10px 10px -5px rgba(7, 34, 70, 0.04);
+  --shadow-card-hover: 0 14px 28px rgba(7, 34, 70, 0.12), 0 10px 10px rgba(7, 34, 70, 0.06);
+  --shadow-glow-green: 0 0 20px rgba(85, 167, 36, 0.35);
+
+  /* ==========================================================================
+     RADIOS DE BORDE (Border Radius)
+     ========================================================================== */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+
+  /* ==========================================================================
+     TRANSICIONES Y TIMING
+     ========================================================================== */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 350ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ==========================================================================
+     LAYOUT Y CONTENEDOR
+     ========================================================================== */
+  --container-max-width: 1240px;
+  --header-height: 76px;
+  --target-touch-min: 44px; /* WCAG 2.1 AA target size */
+}

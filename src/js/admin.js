@@ -1,0 +1,377 @@
+/**
+ * admin.js
+ * Módulo del Panel Administrativo de BioClean Master:
+ * Control de acceso por sesión, cálculo de KPIs en tiempo real, búsqueda,
+ * filtrado multidimensional, gestión de estados, notas internas y exportación a CSV.
+ */
+
+import { quotesRepo, AuthManager } from './storage.js';
+import { SERVICES, MODALITIES } from '../data/servicesData.js';
+
+export const AdminModule = {
+  currentFilterStatus: 'todos',
+  currentFilterService: 'todos',
+  searchQuery: '',
+  activeQuote: null,
+
+  async init() {
+    this.bindEvents();
+    this.checkSessionAndRender();
+
+    // Actualización reactiva cuando entra una nueva cotización
+    window.addEventListener('bcm:quote-created', () => {
+      if (AuthManager.isAuthenticated()) {
+        this.renderDashboard();
+      }
+    });
+  },
+
+  bindEvents() {
+    // Login form
+    const loginForm = document.getElementById('admin-login-form');
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const user = document.getElementById('admin-user-input').value;
+        const pass = document.getElementById('admin-pass-input').value;
+        const errEl = document.getElementById('admin-login-error');
+
+        const res = AuthManager.login(user, pass);
+        if (res.success) {
+          if (errEl) errEl.style.display = 'none';
+          this.checkSessionAndRender();
+        } else {
+          if (errEl) {
+            errEl.textContent = res.message;
+            errEl.style.display = 'block';
+          }
+        }
+      });
+    }
+
+    // Logout
+    const logoutBtn = document.getElementById('admin-logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        AuthManager.logout();
+        this.checkSessionAndRender();
+      });
+    }
+
+    // Búsqueda y filtros
+    const searchInput = document.getElementById('admin-search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.searchQuery = e.target.value.toLowerCase().trim();
+        this.renderQuotesTable();
+      });
+    }
+
+    const statusFilter = document.getElementById('admin-filter-status');
+    if (statusFilter) {
+      statusFilter.addEventListener('change', (e) => {
+        this.currentFilterStatus = e.target.value;
+        this.renderQuotesTable();
+      });
+    }
+
+    const serviceFilter = document.getElementById('admin-filter-service');
+    if (serviceFilter) {
+      serviceFilter.addEventListener('change', (e) => {
+        this.currentFilterService = e.target.value;
+        this.renderQuotesTable();
+      });
+    }
+
+    // Exportar CSV
+    const exportCsvBtn = document.getElementById('admin-export-csv-btn');
+    if (exportCsvBtn) {
+      exportCsvBtn.addEventListener('click', () => this.handleExportCSV());
+    }
+
+    // Eventos del modal de detalle de cotización
+    this.setupDetailDrawer();
+  },
+
+  /**
+   * Verifica la sesión y conmuta entre la vista de login y el dashboard
+   */
+  async checkSessionAndRender() {
+    const isAuth = AuthManager.isAuthenticated();
+    const loginView = document.getElementById('admin-login-container');
+    const dashboardView = document.getElementById('admin-dashboard-container');
+
+    if (loginView && dashboardView) {
+      if (isAuth) {
+        loginView.style.display = 'none';
+        dashboardView.style.display = 'block';
+        await this.renderDashboard();
+      } else {
+        loginView.style.display = 'block';
+        dashboardView.style.display = 'none';
+      }
+    }
+  },
+
+  /**
+   * Renderiza KPIs y la tabla de solicitudes
+   */
+  async renderDashboard() {
+    await this.renderKPIs();
+    await this.renderQuotesTable();
+  },
+
+  /**
+   * Calcula e inyecta los KPIs en tiempo real
+   */
+  async renderKPIs() {
+    const kpis = await quotesRepo.getKPIs();
+
+    const totalEl = document.getElementById('kpi-total-quotes');
+    const pendingEl = document.getElementById('kpi-pending-quotes');
+    const acceptedEl = document.getElementById('kpi-accepted-quotes');
+    const weekEl = document.getElementById('kpi-week-quotes');
+
+    if (totalEl) totalEl.textContent = kpis.total;
+    if (pendingEl) pendingEl.textContent = kpis.pending;
+    if (acceptedEl) acceptedEl.textContent = kpis.accepted;
+    if (weekEl) weekEl.textContent = kpis.thisWeekFollowups;
+  },
+
+  /**
+   * Renderiza el listado de solicitudes con filtros y búsqueda activa
+   */
+  async renderQuotesTable() {
+    const tbody = document.getElementById('admin-quotes-tbody');
+    if (!tbody) return;
+
+    let quotes = await quotesRepo.getAll();
+
+    // Filtro por Estado
+    if (this.currentFilterStatus !== 'todos') {
+      quotes = quotes.filter(q => q.status === this.currentFilterStatus);
+    }
+
+    // Filtro por Servicio
+    if (this.currentFilterService !== 'todos') {
+      quotes = quotes.filter(q => q.service?.categoryId === this.currentFilterService);
+    }
+
+    // Búsqueda por folio, cliente, empresa o teléfono
+    if (this.searchQuery) {
+      quotes = quotes.filter(q => {
+        const idMatch = q.id?.toLowerCase().includes(this.searchQuery);
+        const nameMatch = q.client?.fullName?.toLowerCase().includes(this.searchQuery);
+        const compMatch = q.client?.company?.toLowerCase().includes(this.searchQuery);
+        const phoneMatch = q.client?.phone?.includes(this.searchQuery);
+        return idMatch || nameMatch || compMatch || phoneMatch;
+      });
+    }
+
+    if (!quotes.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 32px; color: var(--bcm-slate);">
+            No se encontraron solicitudes con los criterios de búsqueda seleccionados.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = quotes.map(q => {
+      const statusBadge = this.getStatusBadge(q.status);
+      const dateFormatted = new Date(q.createdAt).toLocaleDateString('es-MX', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+
+      return `
+        <tr style="cursor: pointer;" class="js-quote-row" data-id="${q.id}">
+          <td><strong>${q.id}</strong></td>
+          <td>${dateFormatted}</td>
+          <td>
+            <div style="font-weight: 600; color: var(--bcm-navy);">${q.client?.fullName}</div>
+            <div style="font-size: 0.75rem; color: var(--bcm-slate);">${q.client?.company || 'Particular'}</div>
+          </td>
+          <td>
+            <div>${q.service?.categoryTitle}</div>
+            <div style="font-size: 0.75rem; color: var(--bcm-slate);">${q.service?.modalityTitle} · ${q.property?.squareMeters} m²</div>
+          </td>
+          <td>${q.client?.phone}</td>
+          <td>${statusBadge}</td>
+          <td>
+            <button type="button" class="btn btn-outline btn-sm js-view-quote-btn" data-id="${q.id}">
+              Gestionar
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Eventos para abrir detalle de cada fila
+    tbody.querySelectorAll('.js-quote-row, .js-view-quote-btn').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const quoteId = el.dataset.id;
+        if (quoteId) this.openDetailDrawer(quoteId);
+      });
+    });
+  },
+
+  /**
+   * Obtiene la etiqueta visual según el estado de la solicitud
+   */
+  getStatusBadge(status) {
+    const map = {
+      nueva: '<span class="badge badge-navy">Nueva</span>',
+      en_revision: '<span class="badge badge-blue">En Revisión</span>',
+      visita_pendiente: '<span class="badge badge-warning">Visita Pendiente</span>',
+      cotizacion_preparacion: '<span class="badge badge-blue">Cotización en Prep.</span>',
+      cotizacion_enviada: '<span class="badge badge-green">Cotización Enviada</span>',
+      aceptada: '<span class="badge badge-success">Aceptada / Cerrada</span>',
+      rechazada: '<span class="badge badge-danger">Rechazada</span>',
+      cancelada: '<span class="badge" style="background:#E2E8F0; color:#64748B;">Cancelada</span>'
+    };
+    return map[status] || `<span class="badge">${status}</span>`;
+  },
+
+  /**
+   * Configura el cajón / modal de detalle y edición de cotización
+   */
+  setupDetailDrawer() {
+    const modal = document.getElementById('admin-detail-modal');
+    const closeBtn = document.getElementById('close-admin-detail-modal');
+    const saveStatusBtn = document.getElementById('admin-save-status-btn');
+    const addNoteBtn = document.getElementById('admin-add-note-btn');
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+      });
+    }
+
+    if (saveStatusBtn) {
+      saveStatusBtn.addEventListener('click', async () => {
+        if (!this.activeQuote) return;
+        const newStatus = document.getElementById('admin-detail-status-select').value;
+        const newAssigned = document.getElementById('admin-detail-assigned-input').value;
+        const newFollowup = document.getElementById('admin-detail-followup-input').value;
+
+        await quotesRepo.update(this.activeQuote.id, {
+          status: newStatus,
+          assignedTo: newAssigned,
+          followUpDate: newFollowup
+        });
+
+        // Registrar nota de auditoría automática
+        await quotesRepo.addNote(
+          this.activeQuote.id,
+          `Estado actualizado a: ${newStatus}. Responsable: ${newAssigned}. Fecha seguimiento: ${newFollowup}.`,
+          'Admin'
+        );
+
+        this.openDetailDrawer(this.activeQuote.id);
+        this.renderDashboard();
+      });
+    }
+
+    if (addNoteBtn) {
+      addNoteBtn.addEventListener('click', async () => {
+        if (!this.activeQuote) return;
+        const noteInput = document.getElementById('admin-new-note-text');
+        const text = noteInput.value.trim();
+        if (!text) return;
+
+        await quotesRepo.addNote(this.activeQuote.id, text, 'Administrador');
+        noteInput.value = '';
+        this.openDetailDrawer(this.activeQuote.id);
+      });
+    }
+  },
+
+  /**
+   * Abre y puebla el modal de gestión detallada de la solicitud
+   */
+  async openDetailDrawer(id) {
+    const quote = await quotesRepo.getById(id);
+    if (!quote) return;
+    this.activeQuote = quote;
+
+    const modal = document.getElementById('admin-detail-modal');
+    if (!modal) return;
+
+    // Encabezado
+    document.getElementById('admin-detail-folio').textContent = quote.id;
+    document.getElementById('admin-detail-created').textContent = new Date(quote.createdAt).toLocaleString('es-MX');
+
+    // Datos del cliente
+    document.getElementById('admin-detail-client-name').textContent = quote.client?.fullName;
+    document.getElementById('admin-detail-client-company').textContent = quote.client?.company || 'Particular';
+    document.getElementById('admin-detail-client-phone').textContent = quote.client?.phone;
+    document.getElementById('admin-detail-client-email').textContent = quote.client?.email;
+    document.getElementById('admin-detail-client-contact').textContent = quote.client?.preferredContact?.toUpperCase();
+
+    // Inmueble
+    document.getElementById('admin-detail-prop-type').textContent = quote.property?.type?.toUpperCase();
+    document.getElementById('admin-detail-prop-zone').textContent = quote.property?.cityZone;
+    document.getElementById('admin-detail-prop-m2').textContent = `${quote.property?.squareMeters} m²`;
+    document.getElementById('admin-detail-prop-levels').textContent = quote.property?.levels || 'N/A';
+    document.getElementById('admin-detail-prop-desc').textContent = quote.property?.description;
+
+    // Servicio
+    document.getElementById('admin-detail-serv-cat').textContent = quote.service?.categoryTitle;
+    document.getElementById('admin-detail-serv-mod').textContent = quote.service?.modalityTitle;
+    document.getElementById('admin-detail-serv-freq').textContent = quote.service?.frequency?.toUpperCase();
+    document.getElementById('admin-detail-serv-visit').textContent = quote.service?.evaluationVisit ? 'Sí requerida' : 'No en primera etapa';
+    document.getElementById('admin-detail-serv-supplies').textContent = quote.service?.supplies?.toUpperCase();
+    document.getElementById('admin-detail-serv-comments').textContent = quote.service?.additionalComments || 'Sin comentarios adicionales.';
+
+    // Controles de estado y asignación
+    const statusSelect = document.getElementById('admin-detail-status-select');
+    if (statusSelect) statusSelect.value = quote.status;
+
+    const assignedInput = document.getElementById('admin-detail-assigned-input');
+    if (assignedInput) assignedInput.value = quote.assignedTo || '';
+
+    const followupInput = document.getElementById('admin-detail-followup-input');
+    if (followupInput) followupInput.value = quote.followUpDate || '';
+
+    // Historial de notas
+    const notesContainer = document.getElementById('admin-detail-notes-list');
+    if (notesContainer) {
+      notesContainer.innerHTML = (quote.notes || []).map(n => `
+        <div style="background: var(--color-surface-subtle); padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid var(--bcm-blue); font-size: 0.8125rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--bcm-slate); font-size: 0.75rem;">
+            <strong>${n.author}</strong>
+            <span>${new Date(n.date).toLocaleString('es-MX')}</span>
+          </div>
+          <div>${n.text}</div>
+        </div>
+      `).join('') || '<p style="color: var(--bcm-slate); font-size: 0.8125rem;">No hay notas registradas.</p>';
+    }
+
+    modal.classList.add('active');
+  },
+
+  /**
+   * Genera y descarga el archivo CSV con todas las solicitudes
+   */
+  async handleExportCSV() {
+    const csvContent = await quotesRepo.exportToCSV();
+    if (!csvContent) {
+      alert('No hay solicitudes para exportar.');
+      return;
+    }
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `BioClean_Master_Solicitudes_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+};
