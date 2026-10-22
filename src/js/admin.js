@@ -118,10 +118,21 @@ export const AdminModule = {
     const loginView = document.getElementById('admin-login-container');
     const dashboardView = document.getElementById('admin-dashboard-container');
 
+    const emailBadge = document.getElementById('admin-user-email-badge');
+    const supaBadge = document.getElementById('admin-supabase-status-badge');
+    const changePassBtn = document.getElementById('admin-open-password-btn');
+    const logoutBtn = document.getElementById('admin-logout-btn');
+
     if (loginView && dashboardView) {
       if (isAuth) {
         loginView.style.display = 'none';
         dashboardView.style.display = 'block';
+
+        // Mostrar controles y opciones exclusivas cuando hay sesión iniciada
+        if (emailBadge) emailBadge.style.display = 'inline-flex';
+        if (supaBadge) supaBadge.style.display = 'inline-flex';
+        if (changePassBtn) changePassBtn.style.display = 'inline-flex';
+        if (logoutBtn) logoutBtn.style.display = 'inline-flex';
 
         // Actualizar información del usuario en el encabezado
         this.updateHeaderUserInfo();
@@ -130,6 +141,12 @@ export const AdminModule = {
       } else {
         loginView.style.display = 'block';
         dashboardView.style.display = 'none';
+
+        // Ocultar opciones y badges si NO hay sesión iniciada
+        if (emailBadge) emailBadge.style.display = 'none';
+        if (supaBadge) supaBadge.style.display = 'none';
+        if (changePassBtn) changePassBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'none';
       }
     }
   },
