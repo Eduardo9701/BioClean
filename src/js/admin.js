@@ -2,10 +2,11 @@
  * admin.js
  * Módulo del Panel Administrativo de BioClean Master:
  * Control de acceso por sesión, cálculo de KPIs en tiempo real, búsqueda,
- * filtrado multidimensional, gestión de estados, notas internas y exportación a CSV.
+ * filtrado multidimensional, gestión de estados, notas internas,
+ * cambio de contraseña de administrador y sincronización con Supabase.
  */
 
-import { quotesRepo, AuthManager } from './storage.js';
+import { quotesRepo, AuthManager, getSupabaseConnectionStatus } from './storage.js';
 import { SERVICES, MODALITIES } from '../data/servicesData.js';
 
 export const AdminModule = {
@@ -16,7 +17,7 @@ export const AdminModule = {
 
   async init() {
     this.bindEvents();
-    this.checkSessionAndRender();
+    await this.checkSessionAndRender();
 
     // Actualización reactiva cuando entra una nueva cotización
     window.addEventListener('bcm:quote-created', () => {
@@ -30,20 +31,33 @@ export const AdminModule = {
     // Login form
     const loginForm = document.getElementById('admin-login-form');
     if (loginForm) {
-      loginForm.addEventListener('submit', (e) => {
+      loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const user = document.getElementById('admin-user-input').value;
         const pass = document.getElementById('admin-pass-input').value;
         const errEl = document.getElementById('admin-login-error');
+        const submitBtn = loginForm.querySelector('button[type="submit"]');
 
-        const res = AuthManager.login(user, pass);
-        if (res.success) {
-          if (errEl) errEl.style.display = 'none';
-          this.checkSessionAndRender();
-        } else {
-          if (errEl) {
-            errEl.textContent = res.message;
-            errEl.style.display = 'block';
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Verificando...';
+        }
+
+        try {
+          const res = await AuthManager.login(user, pass);
+          if (res.success) {
+            if (errEl) errEl.style.display = 'none';
+            await this.checkSessionAndRender();
+          } else {
+            if (errEl) {
+              errEl.textContent = res.message;
+              errEl.style.display = 'block';
+            }
+          }
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Iniciar Sesión';
           }
         }
       });
@@ -91,6 +105,9 @@ export const AdminModule = {
 
     // Eventos del modal de detalle de cotización
     this.setupDetailDrawer();
+
+    // Eventos del modal de cambio de contraseña
+    this.setupPasswordModal();
   },
 
   /**
@@ -105,10 +122,38 @@ export const AdminModule = {
       if (isAuth) {
         loginView.style.display = 'none';
         dashboardView.style.display = 'block';
+
+        // Actualizar información del usuario en el encabezado
+        this.updateHeaderUserInfo();
+
         await this.renderDashboard();
       } else {
         loginView.style.display = 'block';
         dashboardView.style.display = 'none';
+      }
+    }
+  },
+
+  /**
+   * Actualiza el correo del administrador y el estado de Supabase en el encabezado
+   */
+  updateHeaderUserInfo() {
+    const user = AuthManager.getCurrentUser();
+    const emailBadge = document.getElementById('admin-user-email-badge');
+    if (emailBadge) {
+      emailBadge.textContent = user.email;
+    }
+
+    const supaStatus = getSupabaseConnectionStatus();
+    const supaBadge = document.getElementById('admin-supabase-status-badge');
+    if (supaBadge) {
+      supaBadge.textContent = supaStatus.label;
+      if (supaStatus.connected) {
+        supaBadge.className = 'badge badge-green';
+        supaBadge.title = `Conectado a ${supaStatus.url}`;
+      } else {
+        supaBadge.className = 'badge badge-blue';
+        supaBadge.title = 'Operando con persistencia local y sincronización automática';
       }
     }
   },
@@ -192,14 +237,14 @@ export const AdminModule = {
           <td><strong>${q.id}</strong></td>
           <td>${dateFormatted}</td>
           <td>
-            <div style="font-weight: 600; color: var(--bcm-navy);">${q.client?.fullName}</div>
+            <div style="font-weight: 600; color: var(--bcm-navy);">${q.client?.fullName || 'Sin nombre'}</div>
             <div style="font-size: 0.75rem; color: var(--bcm-slate);">${q.client?.company || 'Particular'}</div>
           </td>
           <td>
-            <div>${q.service?.categoryTitle}</div>
-            <div style="font-size: 0.75rem; color: var(--bcm-slate);">${q.service?.modalityTitle} · ${q.property?.squareMeters} m²</div>
+            <div>${q.service?.categoryTitle || 'General'}</div>
+            <div style="font-size: 0.75rem; color: var(--bcm-slate);">${q.service?.modalityTitle || ''} · ${q.property?.squareMeters || 0} m²</div>
           </td>
-          <td>${q.client?.phone}</td>
+          <td>${q.client?.phone || 'N/A'}</td>
           <td>${statusBadge}</td>
           <td>
             <button type="button" class="btn btn-outline btn-sm js-view-quote-btn" data-id="${q.id}">
@@ -237,7 +282,7 @@ export const AdminModule = {
   },
 
   /**
-   * Configura el cajón / modal de detalle y edición de cotización
+   * Configura el modal de detalle y edición de cotización
    */
   setupDetailDrawer() {
     const modal = document.getElementById('admin-detail-modal');
@@ -259,21 +304,28 @@ export const AdminModule = {
         const newAssigned = document.getElementById('admin-detail-assigned-input').value;
         const newFollowup = document.getElementById('admin-detail-followup-input').value;
 
-        await quotesRepo.update(this.activeQuote.id, {
-          status: newStatus,
-          assignedTo: newAssigned,
-          followUpDate: newFollowup
-        });
+        saveStatusBtn.disabled = true;
+        saveStatusBtn.textContent = 'Guardando...';
 
-        // Registrar nota de auditoría automática
-        await quotesRepo.addNote(
-          this.activeQuote.id,
-          `Estado actualizado a: ${newStatus}. Responsable: ${newAssigned}. Fecha seguimiento: ${newFollowup}.`,
-          'Admin'
-        );
+        try {
+          await quotesRepo.update(this.activeQuote.id, {
+            status: newStatus,
+            assignedTo: newAssigned,
+            followUpDate: newFollowup
+          });
 
-        this.openDetailDrawer(this.activeQuote.id);
-        this.renderDashboard();
+          await quotesRepo.addNote(
+            this.activeQuote.id,
+            `Estado actualizado a: ${newStatus}. Responsable: ${newAssigned || 'Sin asignar'}. Fecha seguimiento: ${newFollowup || 'Sin fecha'}.`,
+            AuthManager.getCurrentUser().email
+          );
+
+          await this.openDetailDrawer(this.activeQuote.id);
+          await this.renderDashboard();
+        } finally {
+          saveStatusBtn.disabled = false;
+          saveStatusBtn.textContent = 'Guardar Cambios de Estado';
+        }
       });
     }
 
@@ -284,9 +336,111 @@ export const AdminModule = {
         const text = noteInput.value.trim();
         if (!text) return;
 
-        await quotesRepo.addNote(this.activeQuote.id, text, 'Administrador');
-        noteInput.value = '';
-        this.openDetailDrawer(this.activeQuote.id);
+        addNoteBtn.disabled = true;
+        try {
+          await quotesRepo.addNote(this.activeQuote.id, text, AuthManager.getCurrentUser().email);
+          noteInput.value = '';
+          await this.openDetailDrawer(this.activeQuote.id);
+        } finally {
+          addNoteBtn.disabled = false;
+        }
+      });
+    }
+  },
+
+  /**
+   * Configura el modal de cambio de contraseña
+   */
+  setupPasswordModal() {
+    const modal = document.getElementById('admin-change-password-modal');
+    const openBtn = document.getElementById('admin-open-password-btn');
+    const closeBtn = document.getElementById('close-admin-password-modal');
+    const form = document.getElementById('admin-change-password-form');
+    const errEl = document.getElementById('admin-password-error');
+    const successEl = document.getElementById('admin-password-success');
+
+    if (openBtn && modal) {
+      openBtn.addEventListener('click', () => {
+        const user = AuthManager.getCurrentUser();
+        const emailLabel = document.getElementById('admin-password-current-email');
+        if (emailLabel) emailLabel.textContent = user.email;
+
+        if (form) form.reset();
+        if (errEl) errEl.style.display = 'none';
+        if (successEl) successEl.style.display = 'none';
+
+        modal.classList.add('active');
+      });
+    }
+
+    if (closeBtn && modal) {
+      closeBtn.addEventListener('click', () => modal.classList.remove('active'));
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const currentPass = document.getElementById('admin-current-password').value;
+        const newPass = document.getElementById('admin-new-password').value;
+        const confirmPass = document.getElementById('admin-confirm-password').value;
+        const submitBtn = document.getElementById('admin-submit-password-btn');
+
+        if (errEl) errEl.style.display = 'none';
+        if (successEl) successEl.style.display = 'none';
+
+        if (newPass !== confirmPass) {
+          if (errEl) {
+            errEl.textContent = 'La nueva contraseña y su confirmación no coinciden.';
+            errEl.style.display = 'block';
+          }
+          return;
+        }
+
+        if (newPass.length < 6) {
+          if (errEl) {
+            errEl.textContent = 'La nueva contraseña debe tener mínimo 6 caracteres.';
+            errEl.style.display = 'block';
+          }
+          return;
+        }
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Actualizando contraseña...';
+        }
+
+        try {
+          const res = await AuthManager.changePassword(currentPass, newPass);
+          if (res.success) {
+            if (successEl) {
+              successEl.textContent = res.message;
+              successEl.style.display = 'block';
+            }
+            form.reset();
+            setTimeout(() => {
+              modal.classList.remove('active');
+            }, 2500);
+          } else {
+            if (errEl) {
+              errEl.textContent = res.message;
+              errEl.style.display = 'block';
+            }
+          }
+        } catch (err) {
+          if (errEl) {
+            errEl.textContent = 'Ocurrió un error inesperado al actualizar la contraseña.';
+            errEl.style.display = 'block';
+          }
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Actualizar Contraseña';
+          }
+        }
       });
     }
   },
@@ -307,25 +461,25 @@ export const AdminModule = {
     document.getElementById('admin-detail-created').textContent = new Date(quote.createdAt).toLocaleString('es-MX');
 
     // Datos del cliente
-    document.getElementById('admin-detail-client-name').textContent = quote.client?.fullName;
+    document.getElementById('admin-detail-client-name').textContent = quote.client?.fullName || 'Sin nombre';
     document.getElementById('admin-detail-client-company').textContent = quote.client?.company || 'Particular';
-    document.getElementById('admin-detail-client-phone').textContent = quote.client?.phone;
-    document.getElementById('admin-detail-client-email').textContent = quote.client?.email;
-    document.getElementById('admin-detail-client-contact').textContent = quote.client?.preferredContact?.toUpperCase();
+    document.getElementById('admin-detail-client-phone').textContent = quote.client?.phone || 'Sin teléfono';
+    document.getElementById('admin-detail-client-email').textContent = quote.client?.email || 'Sin correo';
+    document.getElementById('admin-detail-client-contact').textContent = (quote.client?.preferredContact || 'N/A').toUpperCase();
 
     // Inmueble
-    document.getElementById('admin-detail-prop-type').textContent = quote.property?.type?.toUpperCase();
-    document.getElementById('admin-detail-prop-zone').textContent = quote.property?.cityZone;
-    document.getElementById('admin-detail-prop-m2').textContent = `${quote.property?.squareMeters} m²`;
+    document.getElementById('admin-detail-prop-type').textContent = (quote.property?.type || 'N/A').toUpperCase();
+    document.getElementById('admin-detail-prop-zone').textContent = quote.property?.cityZone || 'N/A';
+    document.getElementById('admin-detail-prop-m2').textContent = `${quote.property?.squareMeters || 0} m²`;
     document.getElementById('admin-detail-prop-levels').textContent = quote.property?.levels || 'N/A';
-    document.getElementById('admin-detail-prop-desc').textContent = quote.property?.description;
+    document.getElementById('admin-detail-prop-desc').textContent = quote.property?.description || 'Sin descripción';
 
     // Servicio
-    document.getElementById('admin-detail-serv-cat').textContent = quote.service?.categoryTitle;
-    document.getElementById('admin-detail-serv-mod').textContent = quote.service?.modalityTitle;
-    document.getElementById('admin-detail-serv-freq').textContent = quote.service?.frequency?.toUpperCase();
+    document.getElementById('admin-detail-serv-cat').textContent = quote.service?.categoryTitle || 'N/A';
+    document.getElementById('admin-detail-serv-mod').textContent = quote.service?.modalityTitle || 'N/A';
+    document.getElementById('admin-detail-serv-freq').textContent = (quote.service?.frequency || 'N/A').toUpperCase();
     document.getElementById('admin-detail-serv-visit').textContent = quote.service?.evaluationVisit ? 'Sí requerida' : 'No en primera etapa';
-    document.getElementById('admin-detail-serv-supplies').textContent = quote.service?.supplies?.toUpperCase();
+    document.getElementById('admin-detail-serv-supplies').textContent = (quote.service?.supplies || 'N/A').toUpperCase();
     document.getElementById('admin-detail-serv-comments').textContent = quote.service?.additionalComments || 'Sin comentarios adicionales.';
 
     // Controles de estado y asignación
