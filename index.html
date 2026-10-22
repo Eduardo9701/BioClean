@@ -995,15 +995,15 @@
             <p style="font-size: 0.8125rem; color: var(--bcm-slate); margin: 0;">Ingresa con las credenciales de administración autorizadas.</p>
           </div>
 
-          <form id="admin-login-form">
+          <form id="admin-login-form" autocomplete="off">
             <div class="form-group" style="margin-bottom: 16px;">
               <label for="admin-user-input" class="form-label">Usuario o Correo</label>
-              <input type="text" id="admin-user-input" class="form-input" placeholder="correo@bioclean.mx" required autocomplete="username">
+              <input type="text" id="admin-user-input" class="form-input" placeholder="correo@bioclean.mx" required autocomplete="off" value="">
             </div>
 
             <div class="form-group" style="margin-bottom: 16px;">
               <label for="admin-pass-input" class="form-label">Contraseña</label>
-              <input type="password" id="admin-pass-input" class="form-input" placeholder="••••••••" required autocomplete="current-password">
+              <input type="password" id="admin-pass-input" class="form-input" placeholder="••••••••" required autocomplete="new-password" value="">
             </div>
 
             <div id="admin-login-error" style="color: var(--color-feedback-danger); font-size: 0.8125rem; margin-bottom: 16px; display: none;"></div>

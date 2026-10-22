@@ -47,6 +47,7 @@ export const AdminModule = {
           const res = await AuthManager.login(user, pass);
           if (res.success) {
             if (errEl) errEl.style.display = 'none';
+            this.clearLoginForm();
             await this.checkSessionAndRender();
           } else {
             if (errEl) {
@@ -68,6 +69,7 @@ export const AdminModule = {
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
         AuthManager.logout();
+        this.clearLoginForm();
         this.checkSessionAndRender();
       });
     }
@@ -147,7 +149,35 @@ export const AdminModule = {
         if (supaBadge) supaBadge.style.display = 'none';
         if (changePassBtn) changePassBtn.style.display = 'none';
         if (logoutBtn) logoutBtn.style.display = 'none';
+
+        // Asegurar que el formulario no retenga datos anteriores
+        this.clearLoginForm();
       }
+    }
+  },
+
+  /**
+   * Limpia el formulario de login y remueve cualquier dato anterior
+   */
+  clearLoginForm() {
+    const loginForm = document.getElementById('admin-login-form');
+    if (loginForm) loginForm.reset();
+
+    const userInput = document.getElementById('admin-user-input');
+    const passInput = document.getElementById('admin-pass-input');
+    const errEl = document.getElementById('admin-login-error');
+
+    if (userInput) {
+      userInput.value = '';
+      userInput.defaultValue = '';
+    }
+    if (passInput) {
+      passInput.value = '';
+      passInput.defaultValue = '';
+    }
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.style.display = 'none';
     }
   },
 
