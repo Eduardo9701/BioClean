@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node tests/test-runner.js"
+    "test": "node tests/test-runner.js",
+    "generate:qr": "node scripts/generate-qr-pdf.js"
   },
   "keywords": [
     "bioclean",
@@ -23,6 +24,8 @@
     "vite": "^6.0.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0"
+    "@supabase/supabase-js": "^2.118.0",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4"
   }
 }
