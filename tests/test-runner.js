@@ -24,7 +24,7 @@ if (!globalThis.importMetaEnv) {
 import { Validation } from '../src/js/validation.js';
 import { SERVICES, MODALITIES, WORK_PROCESS } from '../src/data/servicesData.js';
 import { INITIAL_QUOTES } from '../src/data/initialQuotes.js';
-import { AuthManager, getSupabaseConnectionStatus } from '../src/js/storage.js';
+import { quotesRepo, AuthManager, getSupabaseConnectionStatus } from '../src/js/storage.js';
 
 let totalTests = 0;
 let passedTests = 0;
@@ -130,6 +130,31 @@ async function runTests() {
 
   const acceptedCount = INITIAL_QUOTES.filter(q => q.status === 'aceptada').length;
   assert(acceptedCount >= 1, `Se calculan correctamente las cotizaciones aceptadas (${acceptedCount} aceptadas)`);
+
+  // --------------------------------------------------------------------------
+  // 4.1 Pruebas de Eliminación de Solicitudes y Cotizaciones (quotesRepo.delete)
+  // --------------------------------------------------------------------------
+  console.log('\n--- 4.1 Pruebas de Eliminación de Cotizaciones en Repositorio ---');
+
+  const testQuoteId = 'BCM-TEST-DELETE-001';
+  await quotesRepo.create({
+    id: testQuoteId,
+    client: { fullName: 'Cliente Prueba Borrado', email: 'borrar@ejemplo.com', phone: '5511223344' },
+    property: { type: 'oficina', squareMeters: 100 },
+    service: { categoryId: 'limpieza-recurrente-empresas', categoryTitle: 'Limpieza Recurrente' }
+  });
+
+  const quoteBeforeDelete = await quotesRepo.getById(testQuoteId);
+  assert(quoteBeforeDelete !== null && quoteBeforeDelete.id === testQuoteId, 'La cotización de prueba fue creada exitosamente');
+
+  const deleteResult = await quotesRepo.delete(testQuoteId);
+  assert(deleteResult === true, 'quotesRepo.delete retorna true al eliminar exitosamente una cotización');
+
+  const quoteAfterDelete = await quotesRepo.getById(testQuoteId);
+  assert(quoteAfterDelete === null, 'La cotización eliminada ya no existe en el repositorio (getById retorna null)');
+
+  const deleteNonExistent = await quotesRepo.delete('FOLIO-NO-EXISTENTE');
+  assert(deleteNonExistent === false, 'quotesRepo.delete retorna false si el folio no existe');
 
   // --------------------------------------------------------------------------
   // 5. Verificación de Elementos Permanentes de Marca

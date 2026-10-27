@@ -294,19 +294,41 @@ export const AdminModule = {
           <td>${q.client?.phone || 'N/A'}</td>
           <td>${statusBadge}</td>
           <td>
-            <button type="button" class="btn btn-outline btn-sm js-view-quote-btn" data-id="${q.id}">
-              Gestionar
-            </button>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button type="button" class="btn btn-outline btn-sm js-view-quote-btn" data-id="${q.id}" title="Gestionar cotización">
+                Gestionar
+              </button>
+              <button type="button" class="btn btn-outline-danger btn-sm js-delete-quote-btn" data-id="${q.id}" title="Eliminar cotización">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle;">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  <line x1="10" y1="11" x2="10" y2="17"></line>
+                  <line x1="14" y1="11" x2="14" y2="17"></line>
+                </svg>
+              </button>
+            </div>
           </td>
         </tr>
       `;
     }).join('');
 
-    // Eventos para abrir detalle de cada fila
-    tbody.querySelectorAll('.js-quote-row, .js-view-quote-btn').forEach(el => {
+    // Eventos para abrir detalle de cada fila (excepto si se hace clic en eliminar)
+    tbody.querySelectorAll('.js-quote-row').forEach(el => {
       el.addEventListener('click', (e) => {
+        if (e.target.closest('.js-delete-quote-btn')) return;
         const quoteId = el.dataset.id;
         if (quoteId) this.openDetailDrawer(quoteId);
+      });
+    });
+
+    // Evento de eliminación directa desde la fila de la tabla
+    tbody.querySelectorAll('.js-delete-quote-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const quoteId = btn.dataset.id;
+        if (quoteId) {
+          await this.handleDeleteQuote(quoteId);
+        }
       });
     });
   },
@@ -391,6 +413,14 @@ export const AdminModule = {
         } finally {
           addNoteBtn.disabled = false;
         }
+      });
+    }
+
+    const deleteDetailBtn = document.getElementById('admin-detail-delete-btn');
+    if (deleteDetailBtn) {
+      deleteDetailBtn.addEventListener('click', async () => {
+        if (!this.activeQuote) return;
+        await this.handleDeleteQuote(this.activeQuote.id);
       });
     }
   },
@@ -574,5 +604,148 @@ export const AdminModule = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  },
+
+  /**
+   * Muestra el modal de confirmación con diseño BioClean Master
+   */
+  confirmDeleteModal(quote) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('admin-delete-confirm-modal');
+      const folioEl = document.getElementById('admin-delete-modal-folio');
+      const statusEl = document.getElementById('admin-delete-modal-status');
+      const clientEl = document.getElementById('admin-delete-modal-client');
+      const serviceEl = document.getElementById('admin-delete-modal-service');
+      const confirmBtn = document.getElementById('admin-delete-modal-confirm-btn');
+      const cancelBtn = document.getElementById('admin-delete-modal-cancel-btn');
+      const closeBtn = document.getElementById('close-admin-delete-modal-btn');
+
+      if (!modal) {
+        resolve(window.confirm(`¿Estás seguro de que deseas eliminar permanentemente la solicitud con folio ${quote.id}?`));
+        return;
+      }
+
+      if (folioEl) folioEl.textContent = quote.id;
+      if (statusEl) {
+        statusEl.innerHTML = this.getStatusBadge(quote.status);
+      }
+      if (clientEl) {
+        const name = quote.client?.fullName || 'Sin nombre';
+        const company = quote.client?.company ? ` · ${quote.client.company}` : '';
+        clientEl.textContent = `${name}${company}`;
+      }
+      if (serviceEl) {
+        const cat = quote.service?.categoryTitle || 'General';
+        const m2 = quote.property?.squareMeters ? ` · ${quote.property.squareMeters} m²` : '';
+        serviceEl.textContent = `${cat}${m2}`;
+      }
+
+      const cleanup = () => {
+        modal.classList.remove('active');
+        confirmBtn.removeEventListener('click', onConfirm);
+        cancelBtn.removeEventListener('click', onCancel);
+        if (closeBtn) closeBtn.removeEventListener('click', onCancel);
+        modal.removeEventListener('click', onBackdrop);
+        document.removeEventListener('keydown', onKeyDown);
+      };
+
+      const onConfirm = () => {
+        cleanup();
+        resolve(true);
+      };
+
+      const onCancel = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      const onBackdrop = (e) => {
+        if (e.target === modal) {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      confirmBtn.addEventListener('click', onConfirm);
+      cancelBtn.addEventListener('click', onCancel);
+      if (closeBtn) closeBtn.addEventListener('click', onCancel);
+      modal.addEventListener('click', onBackdrop);
+      document.addEventListener('keydown', onKeyDown);
+
+      modal.classList.add('active');
+    });
+  },
+
+  /**
+   * Elimina una solicitud o cotización previa confirmación del administrador
+   */
+  async handleDeleteQuote(id) {
+    const quote = await quotesRepo.getById(id);
+    if (!quote) {
+      this.showToast('No se encontró la solicitud seleccionada.', 'danger');
+      return;
+    }
+
+    const confirmed = await this.confirmDeleteModal(quote);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const deleted = await quotesRepo.delete(id);
+      if (deleted) {
+        // Cerrar modal de detalle si estaba abierto para este folio
+        const detailModal = document.getElementById('admin-detail-modal');
+        if (detailModal && this.activeQuote && this.activeQuote.id === id) {
+          detailModal.classList.remove('active');
+          this.activeQuote = null;
+        }
+
+        this.showToast(`Solicitud ${id} eliminada exitosamente.`, 'success');
+        await this.renderDashboard();
+      } else {
+        this.showToast('No se pudo encontrar la solicitud para eliminar.', 'danger');
+      }
+    } catch (err) {
+      console.error('Error al eliminar solicitud:', err);
+      this.showToast('Ocurrió un error inesperado al intentar eliminar la solicitud.', 'danger');
+    }
+  },
+
+  /**
+   * Muestra un mensaje flotante tipo Toast
+   */
+  showToast(message, type = 'info') {
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    if (type === 'danger') {
+      toast.style.borderLeft = '4px solid var(--color-feedback-danger)';
+    } else if (type === 'success') {
+      toast.style.borderLeft = '4px solid var(--bcm-green)';
+    } else {
+      toast.style.borderLeft = '4px solid var(--bcm-mint)';
+    }
+    toast.innerHTML = `<span>${message}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, 3500);
   }
 };

@@ -259,6 +259,56 @@ class QuotesRepository {
   }
 
   /**
+   * Elimina permanentemente una solicitud por su folio
+   */
+  async delete(id) {
+    await this.init();
+
+    // 1. Comprobar existencia antes de eliminar
+    const existing = await this.getById(id);
+    if (!existing) {
+      return false;
+    }
+
+    // 2. Eliminar en Supabase si está disponible
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const { error } = await supabase
+          .from('quotes')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.warn('Error al eliminar en Supabase:', error.message);
+        } else {
+          console.info('Cotización eliminada exitosamente en Supabase:', id);
+        }
+      } catch (supaErr) {
+        console.warn('Fallo de conexión al eliminar en Supabase:', supaErr);
+      }
+    }
+
+    // 3. Eliminar del almacenamiento LocalStorage local
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const localList = JSON.parse(raw);
+        const filtered = localList.filter(q => q.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      }
+    } catch (err) {
+      console.warn('Error actualizando localStorage al eliminar:', err);
+    }
+
+    // 4. Eliminar de la base en memoria si aplica
+    if (this.memoryDb) {
+      this.memoryDb = this.memoryDb.filter(q => q.id !== id);
+    }
+
+    return true;
+  }
+
+  /**
    * Agrega una nota interna al historial de la solicitud
    */
   async addNote(id, noteText, author = 'Administrador') {

@@ -106,6 +106,31 @@
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Peligro / Eliminar (Danger) */
+.btn-danger {
+  background-color: var(--color-feedback-danger);
+  border-color: var(--color-feedback-danger);
+  color: var(--bcm-white);
+}
+
+.btn-danger:hover {
+  background-color: #b71c1c;
+  border-color: #b71c1c;
+  color: var(--bcm-white);
+}
+
+.btn-outline-danger {
+  background-color: transparent;
+  border-color: var(--color-feedback-danger);
+  color: var(--color-feedback-danger);
+}
+
+.btn-outline-danger:hover {
+  background-color: var(--color-feedback-danger-bg);
+  border-color: var(--color-feedback-danger);
+  color: #b71c1c;
+}
+
 /* Botón Deshabilitado */
 .btn:disabled,
 .btn.disabled {
