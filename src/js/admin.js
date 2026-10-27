@@ -110,6 +110,16 @@ export const AdminModule = {
 
     // Eventos del modal de cambio de contraseña
     this.setupPasswordModal();
+
+    // Atajo de teclado privado para administradores (Ctrl + Shift + A o Alt + A)
+    window.addEventListener('keydown', (e) => {
+      const isCtrlShiftA = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a');
+      const isAltA = e.altKey && (e.key === 'A' || e.key === 'a');
+      if (isCtrlShiftA || isAltA) {
+        e.preventDefault();
+        window.location.hash = '#admin';
+      }
+    });
   },
 
   /**
@@ -124,6 +134,21 @@ export const AdminModule = {
     const supaBadge = document.getElementById('admin-supabase-status-badge');
     const changePassBtn = document.getElementById('admin-open-password-btn');
     const logoutBtn = document.getElementById('admin-logout-btn');
+
+    // Enlaces de acceso al portal en el sitio público (ocultos para el público general)
+    const navAdminLink = document.getElementById('nav-admin-link');
+    const footerAdminLink = document.getElementById('footer-admin-link');
+    const footerAdminBottomLink = document.getElementById('footer-admin-bottom-link');
+
+    if (navAdminLink) {
+      navAdminLink.style.display = isAuth ? 'inline-flex' : 'none';
+    }
+    if (footerAdminLink) {
+      footerAdminLink.style.display = isAuth ? 'inline-block' : 'none';
+    }
+    if (footerAdminBottomLink) {
+      footerAdminBottomLink.style.display = isAuth ? 'inline-block' : 'none';
+    }
 
     if (loginView && dashboardView) {
       if (isAuth) {
